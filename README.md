@@ -1,5 +1,5 @@
 # Video-to-Powerpoint
-I (ChatGPT) made a python script that allows to convert a video to a powerpoint presentation
+I (ChatGPT) made a python script that allows to convert a video into a powerpoint presentation
 
 The script supports framerates from 0.1 to 60fps. Every frame per second is its own slide.
 
