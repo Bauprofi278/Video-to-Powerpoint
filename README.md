@@ -22,5 +22,6 @@ The script supports framerates from 0.1 to 60fps. Every frame per second is its 
 5. Advance seconds: --advance-seconds (currently does nothing)
 
 An example would be:
- python video_to_pptx.py "My-Video.mp4" --fps 60 --output "My Video Presentation" --max-slides 600
+
+  python video_to_pptx.py "My-Video.mp4" --fps 60 --output "My Video Presentation" --max-slides 600
 
