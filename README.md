@@ -28,4 +28,4 @@ An example would be:
   python video_to_pptx.py "My-Video.mp4" --fps 60 --output "My Video Presentation" --max-slides 600
 
 # My test
-I tested the script with a 5 min and 47 second video at 60fps and it took around 2hrs and 25mins with a 5060ti a AMD Ryzen 7 9800X3D 8-Core CPU and 32GB of DDR5 ram with version 2.0 and the final presentation had 20851 slides
+I tested the script with a 5 min and 47 second video at 60fps and it took around 2hrs and 25mins with a 5060ti a AMD Ryzen 7 9800X3D 8-Core CPU and 32GB of DDR5 ram with version 2.0 and the final presentation had 20851 slides but the speed of the script slows exponentially
