@@ -3,6 +3,8 @@ I (ChatGPT) made a python script that allows to convert a video into a powerpoin
 
 The script supports framerates from 0.1 to 60fps. Every frame per second is its own slide.
 
+The file on the main page should always be the latest
+
 
 # Installation:
 1. Download the requirements.txt from the main page and the version you want from the releases tab
