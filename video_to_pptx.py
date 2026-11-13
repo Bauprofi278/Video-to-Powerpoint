@@ -10,11 +10,13 @@ At 10 fps, it creates one slide every 0.1 seconds.
 from __future__ import annotations
 
 import argparse
+import io
 import math
 import os
 import re
 import sys
 import tempfile
+import time
 import zipfile
 from pathlib import Path
 
@@ -51,6 +53,19 @@ def positive_seconds(value: str) -> float:
     return seconds
 
 
+def format_duration(seconds: float) -> str:
+    """Return a compact human-readable duration."""
+    seconds = max(0.0, float(seconds))
+    total_seconds = int(seconds)
+    hours, remainder = divmod(total_seconds, 3600)
+    minutes, secs = divmod(remainder, 60)
+    if hours:
+        return f"{hours:02d}:{minutes:02d}:{secs:02d}"
+    if minutes:
+        return f"{minutes:02d}:{secs:02d}"
+    return f"{secs}s"
+
+
 def set_automatic_advance(pptx_path: Path, milliseconds: int) -> None:
     """Set a PowerPoint auto-advance transition on every slide.
 
@@ -77,7 +92,7 @@ def set_automatic_advance(pptx_path: Path, milliseconds: int) -> None:
             raise
 
 
-def add_contained_image(slide, image_path: Path, image_width: int, image_height: int) -> None:
+def add_contained_image(slide, image_source, image_width: int, image_height: int) -> None:
     """Add an image without stretching or cropping it, centered on black."""
     # A black rectangle keeps letterboxing intentional for portrait or square video.
     background = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, 0, 0, SLIDE_WIDTH, SLIDE_HEIGHT)
@@ -97,7 +112,7 @@ def add_contained_image(slide, image_path: Path, image_width: int, image_height:
         width = int(height * image_ratio)
         left = int((SLIDE_WIDTH - width) / 2)
         top = 0
-    slide.shapes.add_picture(str(image_path), left, top, width=width, height=height)
+    slide.shapes.add_picture(image_source, left, top, width=width, height=height)
 
 
 def parse_arguments() -> argparse.Namespace:
@@ -174,25 +189,50 @@ def main() -> int:
     blank_layout = presentation.slide_layouts[6]
 
     try:
-        with tempfile.TemporaryDirectory(prefix="video_to_pptx_") as temp_dir_name:
-            temp_dir = Path(temp_dir_name)
-            for index in range(slide_count):
-                source_frame = min(round(index * source_fps / args.fps), total_frames - 1)
-                timestamp_ms = source_frame / source_fps * 1000
-                capture.set(cv2.CAP_PROP_POS_FRAMES, source_frame)
-                success, frame = capture.read()
+        frame_index = 0
+        next_slide_index = 0
+        start_time = time.perf_counter()
+        while True:
+            success, frame = capture.read()
+            if not success:
+                break
+
+            while next_slide_index < slide_count:
+                target_frame = min(round(next_slide_index * source_fps / args.fps), total_frames - 1)
+                if target_frame != frame_index:
+                    break
+
+                success, encoded = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 90])
                 if not success:
-                    raise RuntimeError(f"Could not read frame {index + 1} at {timestamp_ms / 1000:.3f} seconds.")
-                image_path = temp_dir / f"frame-{index:05d}.jpg"
-                if not cv2.imwrite(str(image_path), frame, [cv2.IMWRITE_JPEG_QUALITY, 90]):
-                    raise RuntimeError(f"Could not save temporary frame {index + 1}.")
+                    raise RuntimeError(f"Could not encode frame {next_slide_index + 1}.")
+
                 slide = presentation.slides.add_slide(blank_layout)
-                add_contained_image(slide, image_path, width, height)
-                print(f"\rPreparing slide {index + 1}/{slide_count} ({(index + 1) / slide_count:.0%})", end="", flush=True)
-            print("\nWriting PowerPoint file …", flush=True)
-            presentation.save(str(output_path))
-            if args.auto_advance:
-                set_automatic_advance(output_path, round(advance_seconds * 1000))
+                add_contained_image(slide, io.BytesIO(encoded.tobytes()), width, height)
+
+                elapsed = time.perf_counter() - start_time
+                done = next_slide_index + 1
+                remaining = slide_count - done
+                eta = (elapsed / done) * remaining if done else 0.0
+                print(
+                    f"\rPreparing slide {done}/{slide_count} ({done / slide_count:.0%}) | "
+                    f"elapsed {format_duration(elapsed)} | ETA {format_duration(eta)}",
+                    end="",
+                    flush=True,
+                )
+                next_slide_index += 1
+
+            frame_index += 1
+
+        if next_slide_index < slide_count:
+            print(
+                f"\nWarning: video ended early after {next_slide_index} slides; expected {slide_count} based on metadata.",
+                file=sys.stderr,
+            )
+
+        print("\nWriting PowerPoint file …", flush=True)
+        presentation.save(str(output_path))
+        if args.auto_advance:
+            set_automatic_advance(output_path, round(advance_seconds * 1000))
     except (RuntimeError, OSError) as exc:
         print(f"\nError: {exc}", file=sys.stderr)
         return 1
